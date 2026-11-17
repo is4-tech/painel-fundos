@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Fundos · dados fictícios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f1;--card:#fff;--ink:#14231f;--mute:#5d6b66;--line:#d9dfda;--up:#0f7a4f;--down:#b3261e;--acc:#14504a;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1a17;--card:#16241f;--ink:#e8efeb;--mute:#93a39c;--line:#2a3b35;--up:#4ec28d;--down:#ff8a80;--acc:#7fd1c4;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom))}
+main{max-width:820px;margin:0 auto}
+h1{font:600 26px/1.2 "IBM Plex Serif",Georgia,serif;margin:8px 0 4px}
+.sub{color:var(--mute);margin:0 0 18px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:6px;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px}
+.kpi small{color:var(--mute);display:block}
+.kpi b{font:600 22px "IBM Plex Serif",Georgia,serif}
+.box{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}
+th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:600}
+.up{color:var(--up)}.down{color:var(--down)}
+form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+label{display:grid;gap:4px;color:var(--mute);font-size:13px}
+input{font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:160px}
+.go{font:inherit;background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:9px 14px;cursor:pointer}
+.msg{color:var(--down);min-height:1.4em;margin:6px 0 0;font-size:13px}
+.note{color:var(--mute);font-size:13px}
+svg{width:100%;height:auto;display:block}
+</style>
+</head>
+<body>
+<main>
+<h1>Painel de acompanhamento de fundos</h1>
+<p class="sub">Dados fictícios, criados só para demonstração. Protótipo feito com apoio de IA (vibe coding).</p>
+
+<div class="tabs" id="tabs" role="group" aria-label="Escolha o fundo"></div>
+<div class="kpis" id="kpis"></div>
+
+<div class="box">
+  <b>Rentabilidade acumulada x CDI</b>
+  <svg id="chart" viewBox="0 0 600 220" role="img" aria-label="Gráfico do fundo contra o CDI"></svg>
+  <span class="note"><span class="up">●</span> Fundo &nbsp; <span style="color:var(--mute)">●</span> CDI acumulado</span>
+</div>
+
+<div class="box">
+  <form id="form">
+    <label>Cota de hoje<input id="cota" type="number" step="0.000001" min="0" placeholder="ex.: 10.060000" required></label>
+    <button class="go" type="submit">Adicionar cota do dia</button>
+  </form>
+  <p class="msg" id="msg" role="alert"></p>
+  <p class="note">Ao adicionar a cota, o painel recalcula variação diária, acumulado, CDI e % do CDI.</p>
+</div>
+
+<div class="box scroll">
+  <table>
+    <thead><tr><th>Data</th><th>Cota</th><th>Var. dia</th><th>Acumulado</th><th>CDI acum.</th><th>% do CDI</th><th>Check</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+<p class="note">Premissa: CDI fixo de 0,0551% ao dia útil (valor ilustrativo). A coluna Check refaz o acumulado multiplicando as variações diárias e compara com o cálculo direto pela cota, como uma validação dupla.</p>
+</main>
+
+<script>
+const CDI = 0.0551; // % ao dia, ilustrativo
+const START = 10;
+const funds = [
+  {n:"Fundo Renda DI",    r:[0.0560,0.0548,0.0575,0.0540,0.0562,0.0551,0.0580,0.0535,0.0570]},
+  {n:"Fundo Crédito Privado", r:[0.0610,0.0590,0.0625,0.0600,0.0585,0.0640,0.0605,0.0595,0.0620]},
+  {n:"Fundo Multimercado",r:[0.0700,0.0320,0.0810,0.0200,0.0650,0.0400,0.0900,0.0100,0.0550]}
+];
+funds.forEach(f=>{let c=START;f.c=[c];f.r.forEach(x=>{c*=1+x/100;f.c.push(+c.toFixed(6));});});
+
+const DATES=[];
+(function(){let d=new Date(2026,10,3);while(DATES.length<60){if(d.getDay()%6)DATES.push(new Date(d));d.setDate(d.getDate()+1);}})();
+const fmtD=d=>d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+const pc=(x,n=4)=>x.toLocaleString("pt-BR",{minimumFractionDigits:n,maximumFractionDigits:n})+"%";
+
+let cur=0;
+
+function calc(f){
+  let prod=1;
+  return f.c.map((c,i)=>{
+    const v=i?(c/f.c[i-1]-1)*100:null;
+    if(v!==null)prod*=1+v/100;
+    const acc=(c/f.c[0]-1)*100;
+    const cdi=(Math.pow(1+CDI/100,i)-1)*100;
+    return {i,c,v,acc,cdi,pct:i?acc/cdi*100:null,ok:Math.abs((prod-1)*100-acc)<1e-6};
+  });
+}
+
+function render(){
+  const f=funds[cur],R=calc(f),L=R[R.length-1];
+  document.querySelectorAll("#tabs button").forEach((b,i)=>b.setAttribute("aria-pressed",i===cur));
+  const cls=x=>x>=0?"up":"down";
+  document.getElementById("kpis").innerHTML=
+    `<div class="kpi"><small>Cota atual</small><b>${L.c.toLocaleString("pt-BR",{minimumFractionDigits:6})}</b></div>
+     <div class="kpi"><small>Acumulado</small><b class="${cls(L.acc)}">${pc(L.acc,3)}</b></div>
+     <div class="kpi"><small>CDI no período</small><b>${pc(L.cdi,3)}</b></div>
+     <div class="kpi"><small>% do CDI</small><b class="${L.pct>=100?"up":"down"}">${pc(L.pct,1)}</b></div>`;
+  document.getElementById("rows").innerHTML=R.map(r=>
+    `<tr><td>${fmtD(DATES[r.i])}</td><td>${r.c.toLocaleString("pt-BR",{minimumFractionDigits:6})}</td>
+     <td class="${r.v===null?"":cls(r.v)}">${r.v===null?"–":pc(r.v)}</td>
+     <td>${pc(r.acc,3)}</td><td>${pc(r.cdi,3)}</td>
+     <td class="${r.pct===null?"":r.pct>=100?"up":"down"}">${r.pct===null?"–":pc(r.pct,1)}</td>
+     <td class="${r.ok?"up":"down"}">${r.ok?"OK":"Revisar"}</td></tr>`).reverse().join("");
+  draw(R);
+}
+
+function draw(R){
+  const W=600,H=220,p=30,n=R.length-1||1;
+  const all=R.flatMap(r=>[r.acc,r.cdi]),mx=Math.max(...all),mn=Math.min(0,...all),span=(mx-mn)||1;
+  const X=i=>p+i*(W-2*p)/n,Y=v=>H-p-(v-mn)*(H-2*p)/span;
+  const line=(k,col,w)=>`<polyline fill="none" stroke="${col}" stroke-width="${w}" points="${R.map(r=>X(r.i)+","+Y(r[k])).join(" ")}"/>`;
+  document.getElementById("chart").innerHTML=
+    `<line x1="${p}" x2="${W-p}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/>
+     <text x="${p}" y="14" font-size="11" fill="var(--mute)">${pc(mx,2)}</text>
+     <text x="${p}" y="${H-6}" font-size="11" fill="var(--mute)">${fmtD(DATES[0])}</text>
+     <text x="${W-p}" y="${H-6}" font-size="11" text-anchor="end" fill="var(--mute)">${fmtD(DATES[n])}</text>
+     ${line("cdi","var(--mute)",2)}${line("acc","var(--up)",2.5)}`;
+}
+
+const tabs=document.getElementById("tabs");
+funds.forEach((f,i)=>{const b=document.createElement("button");b.textContent=f.n;b.onclick=()=>{cur=i;render();};tabs.appendChild(b);});
+
+document.getElementById("form").addEventListener("submit",e=>{
+  e.preventDefault();
+  const f=funds[cur],v=parseFloat(document.getElementById("cota").value),m=document.getElementById("msg");
+  if(!(v>0)){m.textContent="Digite uma cota maior que zero.";return;}
+  if(f.c.length>=DATES.length){m.textContent="Limite de dias do exemplo atingido.";return;}
+  m.textContent="";f.c.push(v);document.getElementById("cota").value="";render();
+});
+render();
+</script>
+</body>
+</html>
